@@ -431,3 +431,6 @@ This repo participates in the **Stellar Wave Program** on [Drips](https://drips.
 
 <!-- handsoff-issue-116 -->
 - #116: Excessive Memory Clone Operations in merge_beneficiaries and merge_guardians
+
+<!-- handsoff-issue-63 -->
+- #63: release_inheritance Permits Unauthenticated Payouts to Arbitrary Caller Addresses for Keeper Bounty
