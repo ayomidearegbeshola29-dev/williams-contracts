@@ -66,3 +66,16 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "release_inheritance"
+path = "fuzz_targets/release_inheritance.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "reveal_and_claim"
+path = "fuzz_targets/reveal_and_claim.rs"
+test = false
+doc = false
+bench = false
