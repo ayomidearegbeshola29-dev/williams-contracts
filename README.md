@@ -431,3 +431,12 @@ This repo participates in the **Stellar Wave Program** on [Drips](https://drips.
 
 <!-- handsoff-issue-116 -->
 - #116: Excessive Memory Clone Operations in merge_beneficiaries and merge_guardians
+
+<!-- handsoff-issue-65 -->
+- #65: Fixed-Amount Beneficiaries Cannot Receive Secondary Tokens Deposited in Multi-Token Wills
+
+<!-- handsoff-issue-67 -->
+- #67: update_guardians_weighted Permits Assigning Zero Weight to Guardians
+
+<!-- handsoff-issue-68 -->
+- #68: Guardian Consent Status Survives Unchecked Across Guardian Weight Updates
