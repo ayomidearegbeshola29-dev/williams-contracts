@@ -66,3 +66,9 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "release_inheritance"
+path = "fuzz_targets/release_inheritance.rs"
+test = false
+doc = false
+bench = false
