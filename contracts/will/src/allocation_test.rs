@@ -255,23 +255,83 @@ fn fixed_amount_exceeding_balance_is_rejected() {
         &None,
         &0,
     );
-    assert_eq!(result, Err(Ok(WillError::FixedAmountExceedsBalance)));
+    assert_eq!(result, Err(Ok(WillError::InsufficientBalance)));
 }
 
-/// Issue #91: `storage::next_will_id` must use checked addition so that an
-/// extreme allocation (current id at `u64::MAX`) panics cleanly with a clear
-/// message instead of silently wrapping around.
+/// Issue #66 regression: a will funded exactly to its fixed allocations while
+/// a keeper bounty is configured must still pay each fixed beneficiary their
+/// exact promised amount. The bounty must not shrink fixed payouts.
 #[test]
-#[should_panic(expected = "will id overflow")]
-fn next_will_id_overflow_panics() {
-    let current = u64::MAX;
-    let _next = current.checked_add(1).expect("will id overflow");
+fn fixed_amounts_not_reduced_by_keeper_bounty() {
+    let (env, client, owner, token, token_address) = setup();
+    let a = Address::generate(&env);
+    let b = Address::generate(&env);
+
+    let beneficiaries: SorobanVec<Beneficiary> = vec![
+        &env,
+        Beneficiary {
+            address: a.clone(),
+            allocation: Allocation::FixedAmount(500),
+        },
+        Beneficiary {
+            address: b.clone(),
+            allocation: Allocation::FixedAmount(500),
+        },
+    ];
+    // Fund exactly to the fixed allocation total (1,000 stroops).
+    let tokens: SorobanVec<(Address, i128)> = vec![&env, (token_address.clone(), 1_000_i128)];
+
+    let will_id = client.create_will(
+        &owner,
+        &tokens,
+        &beneficiaries,
+        &90,
+        &7,
+        &vec![&env],
+        &10,
+        &None,
+        &0,
+    );
+    release(&env, &client, will_id);
+
+    // Fixed beneficiaries receive their exact promised amounts, not a
+    // bounty-reduced 490 each.
+    assert_eq!(token.balance(&a), 500);
+    assert_eq!(token.balance(&b), 500);
 }
 
-/// Issue #91: normal increments remain unaffected by the checked addition.
+/// Issue #66: `create_will` must reject a will whose balance cannot cover
+/// both the fixed allocations and the configured keeper bounty.
 #[test]
-fn next_will_id_increments_normally() {
-    let current = 41_u64;
-    let next = current.checked_add(1).expect("will id overflow");
-    assert_eq!(next, 42);
+fn create_will_rejects_insufficient_funds_for_fixed_plus_bounty() {
+    let (env, client, owner, _token, token_address) = setup();
+    let a = Address::generate(&env);
+    let b = Address::generate(&env);
+
+    let beneficiaries: SorobanVec<Beneficiary> = vec![
+        &env,
+        Beneficiary {
+            address: a,
+            allocation: Allocation::FixedAmount(500),
+        },
+        Beneficiary {
+            address: b,
+            allocation: Allocation::FixedAmount(500),
+        },
+    ];
+    // 1,000 stroops covers the fixed amounts but not the 10-stroop bounty.
+    let tokens: SorobanVec<(Address, i128)> = vec![&env, (token_address.clone(), 1_000_i128)];
+
+    let result = client.try_create_will(
+        &owner,
+        &tokens,
+        &beneficiaries,
+        &90,
+        &7,
+        &vec![&env],
+        &10,
+        &None,
+        &0,
+    );
+    assert_eq!(result, Err(Ok(WillError::InsufficientBalance)));
 }
