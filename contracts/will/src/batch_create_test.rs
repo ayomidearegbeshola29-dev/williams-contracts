@@ -189,3 +189,35 @@ fn batch_create_wills_atomicity_rolls_back_token_transfers() {
     // Owner's token balance must be completely unchanged (first spec's transfer was rolled back)
     assert_eq!(token_client.balance(&owner), initial_balance);
 }
+
+#[test]
+fn batch_rejects_cumulative_index_capacity_overflow() {
+    let (env, contract_id, owner, token) = setup();
+    let client = WillContractClient::new(&env, &contract_id);
+
+    // Fill the owner's index up to one below MAX_WILLS_PER_INDEX using
+    // single-will creation so the batch pre-flight is what trips.
+    let max = crate::MAX_WILLS_PER_INDEX;
+    let mut created = 0u32;
+    while created < max - 1 {
+        let single = vec![&env, spec(&env, &token, 1_000, 10_000)];
+        client.batch_create_wills(&owner, &single);
+        created += 1;
+    }
+    assert_eq!(client.get_wills_by_owner(&owner, &None, &max).len(), max - 1);
+
+    // A batch of 2 would push the cumulative count to max + 1, exceeding the
+    // per-index cap. It must abort up front with the capacity error.
+    let specs = vec![
+        &env,
+        spec(&env, &token, 1_000, 10_000),
+        spec(&env, &token, 1_000, 10_000),
+    ];
+    assert_eq!(
+        client.try_batch_create_wills(&owner, &specs),
+        Err(Ok(WillError::IndexCapacityExceeded.into()))
+    );
+
+    // No partial state: the index still holds exactly max - 1 wills.
+    assert_eq!(client.get_wills_by_owner(&owner, &None, &max).len(), max - 1);
+}
