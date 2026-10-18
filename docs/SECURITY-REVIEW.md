@@ -176,6 +176,29 @@ Will IDs are sequential starting from 1. An attacker could enumerate all wills b
 
 **Recommendation:** Consider adding pagination parameters for production use.
 
+### 4.8 Direct SEP-41 Transfers to Contract Address (Low — Informational)
+
+**Location:** `contracts/will/src/lib.rs` (`create_will`, `top_up`)
+
+`create_will` and `top_up` are the only supported paths for moving tokens into
+the contract. A user or external protocol that executes a direct SEP-41
+`transfer` to the contract address without calling `create_will` or `top_up`
+strands the tokens: they increase the contract balance but are not recorded in
+any will's `balances` map or in `ProtocolStats`, and there is no sweep or
+recovery mechanism for them.
+
+**Impact:** User error (e.g. an accidental direct transfer) results in
+permanently stranded tokens in contract custody. Off-chain tooling that reads
+only the contract balance will overstate recoverable funds.
+
+**Recommendation:**
+- Document that direct transfers without `top_up` are unsupported.
+- Consider adding a timelocked, governance-gated sweep function for provably
+  unallocated token balances, or rejecting unmetered deposits if future Soroban
+  token hooks make that possible.
+- Provide clear diagnostic guidance: operators can reconcile `contract balance`
+  against the sum of all `Will.balances` to detect untracked surpluses.
+
 ### 4.7 Fee-on-Transfer and Deflationary Tokens (Medium
 
 /* … truncated 2475 chars — edit only what you need near the top … */
