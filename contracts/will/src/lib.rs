@@ -1858,7 +1858,8 @@ impl WillContract {
         );
 
         storage::remove_failed_payout(&env, will_id, &token, &recipient);
-        events::payout_retried(&env, will_id, &token, &recipient, amount);
+        // The exact `(will_id, token, recipient)` tuple is now resolved.
+        events::payout_retried(&env, will_id, &token, &recipient, amount, true);
     }
 
     /// Redirects a recorded failed payout to a new destination address (#19).

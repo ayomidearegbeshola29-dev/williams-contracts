@@ -462,11 +462,22 @@ pub fn payout_failed(env: &Env, will_id: u64, token: &Address, recipient: &Addre
 }
 
 /// Published when `retry_failed_payout` successfully delivers a previously
-/// failed payout (#459).
-pub fn payout_retried(env: &Env, will_id: u64, token: &Address, recipient: &Address, amount: i128) {
+/// failed payout (#459). The `fully_resolved` flag indicates whether this
+/// retry cleared the recorded failed payout for the exact
+/// `(will_id, token, recipient)` tuple. Indexers that need cross-token or
+/// cross-recipient completion should query storage, as the contract keeps no
+/// reverse index of failed payouts (#107).
+pub fn payout_retried(
+    env: &Env,
+    will_id: u64,
+    token: &Address,
+    recipient: &Address,
+    amount: i128,
+    fully_resolved: bool,
+) {
     env.events().publish(
         (symbol_short!("payretry"), will_id),
-        (token.clone(), recipient.clone(), amount),
+        (token.clone(), recipient.clone(), amount, fully_resolved),
     );
 }
 
