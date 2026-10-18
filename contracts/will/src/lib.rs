@@ -491,9 +491,9 @@ pub use errors::WillError;
 pub use migration::CURRENT_SCHEMA_VERSION;
 pub use storage::GuardianVoteRecord;
 pub use types::{
-    Allocation, Beneficiary, Guardian, GuardianConsent, GuardianSpec, GuardianVoteReason,
-    HashedBeneficiary, OwnerStats, ProtocolStats, ProtocolStatsAudit, TokenLockedBalance, Will,
-    WillPage, WillStatus, WillStatusTransition,
+    Allocation, Beneficiary, FailedPayoutRequest, Guardian, GuardianConsent, GuardianSpec,
+    GuardianVoteReason, HashedBeneficiary, OwnerStats, ProtocolStats, ProtocolStatsAudit,
+    TokenLockedBalance, Will, WillPage, WillStatus, WillStatusTransition,
 };
 
 /// Semantic version of the contract logic, encoded as
@@ -1859,6 +1859,75 @@ impl WillContract {
 
         storage::remove_failed_payout(&env, will_id, &token, &recipient);
         events::payout_retried(&env, will_id, &token, &recipient, amount);
+    }
+
+    /// Retries up to [`BATCH_MAX`] failed payouts in a single invocation (#108).
+    ///
+    /// Each request names a `(will_id, token, recipient)` tuple with a
+    /// recorded failed payout. For every request that still has a recorded
+    /// amount, the contract transfers that amount to the recipient, clears
+    /// the failed-payout record, and emits `payout_retried`. Requests with no
+    /// recorded failed payout are skipped and left recorded so they can be
+    /// retried later.
+    ///
+    /// Returns the requests that were successfully retried. Entries are
+    /// processed independently: one entry's failure does not abort the batch,
+    /// so mass-outage recovery can make partial progress.
+    ///
+    /// # Panics
+    /// - [`WillError::BatchTooLarge`] if `requests` holds more than
+    ///   [`BATCH_MAX`] entries.
+    pub fn batch_retry_failed_payouts(
+        env: Env,
+        requests: Vec<FailedPayoutRequest>,
+    ) -> Vec<FailedPayoutRequest> {
+        let count: u32 = requests.len();
+        if count > BATCH_MAX {
+            panic_with_error!(&env, WillError::BatchTooLarge);
+        }
+
+        let mut succeeded: Vec<FailedPayoutRequest> = Vec::new(&env);
+
+        let mut idx: u32 = 0;
+        while idx < count {
+            let request = requests.get(idx).expect("batch request in bounds");
+            let amount = match storage::get_failed_payout(
+                &env,
+                request.will_id,
+                &request.token,
+                &request.recipient,
+            ) {
+                Some(amount) => amount,
+                None => {
+                    idx += 1;
+                    continue;
+                }
+            };
+
+            token::Client::new(&env, &request.token).transfer(
+                &env.current_contract_address(),
+                &request.recipient,
+                &amount,
+            );
+
+            storage::remove_failed_payout(
+                &env,
+                request.will_id,
+                &request.token,
+                &request.recipient,
+            );
+            events::payout_retried(
+                &env,
+                request.will_id,
+                &request.token,
+                &request.recipient,
+                amount,
+            );
+            succeeded.push_back(request.clone());
+            idx += 1;
+        }
+
+        succeeded
     }
 
     /// Redirects a recorded failed payout to a new destination address (#19).

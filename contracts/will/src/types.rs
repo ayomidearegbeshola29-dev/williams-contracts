@@ -143,6 +143,23 @@ pub enum WillStatus {
     Settled,
 }
 
+/// A single failed-payout retry request submitted to
+/// [`batch_retry_failed_payouts`](crate::WillContract::batch_retry_failed_payouts).
+///
+/// Each entry names the `(will_id, token, recipient)` tuple whose failed
+/// payout should be retried. The amount is read from storage at retry time so
+/// callers need not re-specify it, keeping the request compact.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FailedPayoutRequest {
+    /// The will that recorded the failed payout.
+    pub will_id: u64,
+    /// The token that was to be paid out.
+    pub token: Address,
+    /// The recipient that was to receive the payout.
+    pub recipient: Address,
+}
+
 /// Aggregate protocol statistics that can be queried directly on-chain.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
