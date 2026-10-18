@@ -1955,8 +1955,14 @@ impl WillContract {
         owner.require_auth();
         let mut will = load_owned(&env, will_id, &owner);
 
-        // Allow cancellation from both Active and PendingConfirmation (#43).
-        if will.status != WillStatus::Active && will.status != WillStatus::PendingConfirmation {
+        // Allow cancellation from Active, PendingConfirmation, and Triggered
+        // (#43, #105). A Triggered will can be cancelled directly by its owner
+        // without first running `emergency_checkin`, closing the account in a
+        // single transaction.
+        if will.status != WillStatus::Active
+            && will.status != WillStatus::PendingConfirmation
+            && will.status != WillStatus::Triggered
+        {
             panic_with_error!(&env, WillError::WillNotActive);
         }
 
@@ -1979,12 +1985,13 @@ impl WillContract {
         // permanently inflated (#353). A second per-token loop here would
         // deduct each total twice (#5).
 
-        storage::remove_owner_status_index(
-            &env,
-            &will.owner,
-            WillStatus::Active,
-            will_id,
-        );
+        // Prune the owner status index for every status the will may hold
+        // (Active, PendingConfirmation, or Triggered), then drop it from the
+        // global TriggeredWills index if it was triggered (#105).
+        storage::remove_owner_status_index_all(&env, &will.owner, will_id);
+        if prior_status == WillStatus::Triggered {
+            storage::unindex_triggered_will(&env, will_id);
+        }
         will.balance = 0;
         will.balances = Map::new(&env);
         will.status = WillStatus::Cancelled;
