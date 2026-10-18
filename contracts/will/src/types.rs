@@ -372,6 +372,9 @@ pub struct Will {
     /// elapsed since this timestamp, preventing a compromised owner from
     /// swapping guardians right before a malicious action.
     pub guardian_list_updated_at: u64,
+    /// Unix timestamp (seconds) until which `trigger_will` is blocked after a
+    /// successful `emergency_checkin` (#104). Zero means no cooldown is active.
+    pub trigger_cooldown_until: u64,
     /// Schema version for this will. Used to track which contract version
     /// wrote this state and enable forward/backward compatible migrations.
     /// See `migration.rs` and the "Storage schema versioning" section of

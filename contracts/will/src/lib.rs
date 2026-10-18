@@ -620,6 +620,12 @@ const BATCH_MAX: u32 = 10;
 /// before attempting something malicious.
 const GUARDIAN_COOLDOWN_DAYS: u64 = 7;
 
+/// Minimum active window (in seconds) granted to the owner after a successful
+/// `emergency_checkin`. During this window `trigger_will` is rejected with
+/// [`WillError::CheckinNotDue`], so keepers cannot repeatedly re-trigger an
+/// estate right at expiration boundaries (#104).
+const TRIGGER_COOLDOWN_SECONDS: u64 = 24 * SECONDS_PER_DAY;
+
 /// Grace margin in days after the confirmation window expires before
 /// `refund_unconfirmed_will` can be called to return trapped funds (#40).
 pub const UNCONFIRMED_WILL_REFUND_GRACE_DAYS: u64 = 7;
@@ -971,6 +977,7 @@ impl WillContract {
             keeper_bounty_bps: keeper_bounty,
             keeper_bounty_token: None,
             delegate: None,
+            trigger_cooldown_until: 0,
         };
         storage::save_will(&env, &will);
         storage::index_by_owner(&env, &owner, will_id);
@@ -1581,6 +1588,13 @@ impl WillContract {
             panic_with_error!(&env, WillError::CheckinNotDue);
         }
 
+        // After an `emergency_checkin`, the owner is granted a guaranteed
+        // minimum active window during which keepers cannot re-trigger
+        // (#104). Re-triggering during cooldown is rejected.
+        if now < will.trigger_cooldown_until {
+            panic_with_error!(&env, WillError::CheckinNotDue);
+        }
+
         // Anchor the grace period to the missed check-in deadline, not to
         // whenever a keeper happened to call `trigger_will` (#457). This makes
         // the release time a pure function of the owner's last check-in, so a
@@ -1671,6 +1685,7 @@ impl WillContract {
         will.status = WillStatus::Active;
         will.trigger_time = None;
         will.last_checkin = now;
+        will.trigger_cooldown_until = now + TRIGGER_COOLDOWN_SECONDS;
         will.guardian_vote_weight = 0;
         will.guardian_votes = 0;
         will.guardian_cancel_vote_weight = 0;
@@ -4139,6 +4154,7 @@ impl WillContract {
             // bounty token stays held by the clone (#109).
             keeper_bounty_token: source.keeper_bounty_token.clone(),
             delegate: None,
+            trigger_cooldown_until: 0,
         };
         storage::save_will(&env, &will);
         storage::index_by_owner(&env, &owner, will_id);
@@ -4351,6 +4367,7 @@ impl WillContract {
                 keeper_bounty_bps: 0,
                 keeper_bounty_token: None,
                 delegate: None,
+                trigger_cooldown_until: 0,
             };
             storage::save_will(&env, &will);
             storage::index_by_owner(&env, &owner, will_id);
@@ -5234,6 +5251,7 @@ impl WillContract {
             keeper_bounty_bps: 0,
             keeper_bounty_token: None,
             delegate: None,
+            trigger_cooldown_until: 0,
         };
         storage::save_will(&env, &child);
         storage::index_by_owner(&env, &source.owner, new_id);
